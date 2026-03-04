@@ -63,7 +63,7 @@ class ProtDrugclip(EMProtocol):
         form.addParam('pockets', params.PointerParam,
                       pointerClass='SetOfStructROIs', allowsNull=False,
                       label="ROIs: ",
-                      help='Select the input ROIs.') #todo build one lmdb per pocket
+                      help='Select the input ROIs.')
 
         form.addParam('molecules', params.PointerParam,
                       pointerClass='SetOfSmallMolecules', allowsNull=False,
@@ -94,7 +94,7 @@ class ProtDrugclip(EMProtocol):
 
     def getSmilesStep(self):
         outputFile = self._getPath('smiles.txt')
-        self.smi_to_file = {}  # NEW: map SMILES ? pose file
+        self.smi_to_file = {}
 
         with open(outputFile, 'w') as out:
             for mol in self.molecules.get():
@@ -107,7 +107,7 @@ class ProtDrugclip(EMProtocol):
 
                 if smi:
                     out.write(smi + "\n")
-                    self.smi_to_file[smi] = os.path.basename(molFile)  # store only the filename
+                    self.smi_to_file[smi] = os.path.basename(molFile)
                 else:
                     print(f"Failed to extract SMILES from {molFile}")
 
@@ -297,7 +297,6 @@ class ProtDrugclip(EMProtocol):
 
             insistentRun(self, fullProgram, args, envDic=envDic, cwd=outDir)
 
-            # ? CHECK FILE EXISTS
             if not os.path.exists(fnOut):
                 print(f"SMILES conversion failed for {fnSmall}")
                 return None
