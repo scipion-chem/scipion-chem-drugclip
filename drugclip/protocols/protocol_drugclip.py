@@ -144,7 +144,6 @@ class ProtDrugclip(EMProtocol):
             os.path.join(Plugin.getVar(DRUGCLIP_DIC['home']), 'DrugCLIP/checkpoint_best.pt')
         )
         lmdbDir = os.path.abspath(self._getPath('lmdb'))
-        print(f"LMDB dir: {lmdbDir}")
         resultsDir = self._getPath('results')
         os.makedirs(resultsDir, exist_ok=True)
         pocketLmdbFiles = [
@@ -212,7 +211,6 @@ class ProtDrugclip(EMProtocol):
                     scoreFile = os.path.join(pocketDir, f)
                     break
             if not scoreFile:
-                print(f"No score file found for pocket {pocket}")
                 continue
 
             pocketScores = {}
