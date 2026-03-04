@@ -1,12 +1,10 @@
 =======================
-Biofold plugin
+DrugCLIP plugin
 =======================
 
 **Documentation under development, sorry for the inconvenience**
 
-This is a **Scipion** plugin that offers tools from the
-`Boltz <https://github.com/jwohlwend/boltz>`_, and `Chai <https://github.com/chaidiscovery/chai-lab>`_, as well as imports for `AlphaFold3 <https://github.com/google-deepmind/alphafold3>`_, `Protenix <https://github.com/bytedance/Protenix>`_, Boltz and Chai server results.
-These tools will make it possible to carry out different functions to fold proteins.
+This is a **Scipion** plugin that offers `DrugCLIP <https://github.com/bowen-gao/DrugCLIP>`_ 
 
 
 ==========================
@@ -30,7 +28,7 @@ Biofold is installed automatically by scipion.
 
 .. code-block::
 
-    scipion3 installp -p scipion-chem-biofold
+    scipion3 installp -p scipion-chem-drugclip
 
 
 - **Developer's version**
@@ -39,7 +37,7 @@ Biofold is installed automatically by scipion.
 
     .. code-block::
 
-        git clone https://github.com/scipion-chem/scipion-chem-biofold.git
+        git clone https://github.com/scipion-chem/scipion-chem-drugclip.git
 
     2. **Switch to the desired branch** (master or devel):
 
@@ -49,14 +47,14 @@ Biofold is installed automatically by scipion.
 
     .. code-block::
 
-                cd scipion-chem-biofold
+                cd scipion-chem-drugclip
                 git checkout devel
 
     3. **Install**:
 
     .. code-block::
 
-        scipion3 installp -p path_to_scipion-chem-biofold --devel
+        scipion3 installp -p path_to_scipion-chem-drugclip --devel
 
 
 
