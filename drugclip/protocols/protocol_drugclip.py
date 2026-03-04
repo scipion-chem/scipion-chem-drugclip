@@ -23,9 +23,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import json
-import shutil
-
 import os, csv
 import pyworkflow.protocol.params as params
 from drugclip import DRUGCLIP_DIC
@@ -73,7 +70,7 @@ class ProtDrugclip(EMProtocol):
                       label="Molecules: ",
                       help='Select the molecules to use.')
 
-        form.addParam('useManager', params.EnumParam, default=0, label='Manage structure using: ',
+        form.addParam('useManager', params.EnumParam, default=1, label='Manage structure using: ',
                       choices=['RDKit', 'OpenBabel'],
                       help='Whether to manage the structure (conversion to SMILES) using RDKit or OpenBabel')
 
@@ -83,7 +80,7 @@ class ProtDrugclip(EMProtocol):
                        help='Number of molecules processed per batch.')
         group.addParam('maxPocketAtoms', params.IntParam, default=256,
                        label='Max. atoms per pocket: ',
-                       help='Maximum number fo atoms per pocket.')
+                       help='Maximum number for atoms per pocket.')
 
 
         form.addParallelSection(threads=4, mpi=1)
@@ -262,7 +259,7 @@ class ProtDrugclip(EMProtocol):
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
-        summary = []
+        summary = ["Results csv written in protocols path: results.csv"]
         return summary
 
     def _methods(self):
@@ -280,6 +277,7 @@ class ProtDrugclip(EMProtocol):
     # --------------------------- UTILS functions -----------------------------------
     def getSMI(self, fnSmall):
         fnRoot, ext = os.path.splitext(os.path.basename(fnSmall))
+        print("Extension:", ext)
 
         if ext != '.smi':
             outDir = os.path.abspath(self._getExtraPath())
@@ -287,8 +285,7 @@ class ProtDrugclip(EMProtocol):
 
             args = f' -i "{fnSmall}" -of smi -o {fnOut} --outputDir {outDir}'
 
-            # Always use RDKit (simpler for your case)
-            if fnSmall.endswith(".pdbqt"):
+            if fnSmall.endswith(".pdbqt") or fnSmall.endswith(".mol2"):
                 envDic, scriptName = OPENBABEL_DIC, 'obabel_IO.py'
             else:
                 envDic, scriptName = RDKIT_DIC, 'rdkit_IO.py'
@@ -299,6 +296,11 @@ class ProtDrugclip(EMProtocol):
             )
 
             insistentRun(self, fullProgram, args, envDic=envDic, cwd=outDir)
+
+            # ? CHECK FILE EXISTS
+            if not os.path.exists(fnOut):
+                print(f"SMILES conversion failed for {fnSmall}")
+                return None
 
         else:
             fnOut = fnSmall
