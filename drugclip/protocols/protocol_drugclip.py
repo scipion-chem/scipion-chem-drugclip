@@ -41,6 +41,71 @@ RDKIT, OPENBABEL = 0, 1
 class ProtDrugclip(EMProtocol):
     """
     Protocol to use DrugCLIP.
+
+    AI Generated:
+
+        ProtDrugclip - User Manual
+
+        Overview
+        --------
+        This protocol predicts the binding affinity of small molecules to protein
+        pockets (ROIs) using the DrugCLIP deep learning framework. It converts input
+        molecules to SMILES, prepares them together with the selected pockets, and
+        computes predicted binding scores for each molecule-pocket pair.
+
+        Inputs
+        ------
+        - **pockets**: SetOfStructROIs object containing the regions of interest (ROIs)
+          on the target protein.
+        - **molecules**: SetOfSmallMolecules object representing the ligands to be evaluated.
+        - **useManager**: Choose whether to manage chemical structures using RDKit
+          or OpenBabel (for SMILES conversion).
+        - **batchSize**: Number of molecules processed in each batch.
+        - **maxPocketAtoms**: Maximum number of atoms allowed per pocket.
+
+        Workflow
+        --------
+        1. **SMILES extraction**:
+           - Converts molecule files to SMILES format using RDKit or OpenBabel.
+           - SMILES strings are written to a file and mapped to original molecule files.
+
+        2. **LMDB creation**:
+           - Converts pockets and molecules into an LMDB database suitable for DrugCLIP.
+           - Handles batch processing according to `batchSize` and `maxPocketAtoms`.
+
+        3. **DrugCLIP execution**:
+           - Runs the DrugCLIP model for each pocket LMDB.
+           - Uses GPU if enabled.
+           - Produces predicted binding scores for each molecule-pocket pair.
+
+        4. **Output aggregation**:
+           - Collects scores for all molecule-pocket combinations.
+           - Creates a `results.csv` file with rows for pockets and columns for molecules.
+           - Updates the SetOfStructROIs with DrugCLIP scores file and stores the output SQLite database.
+
+        Outputs
+        -------
+        - **SetOfStructROIs**: Updated ROI set with DrugCLIP scores file attached to each pocket.
+        - **results.csv**: CSV file containing predicted binding scores for each pocket?molecule pair.
+
+        Practical Recommendations
+        -------------------------
+        - Use for evaluating binding potential of a defined set of ligands to specific protein pockets.
+        - When processing large sets of molecules, ensure sufficient GPU/CPU resources.
+        - Verify input ROIs are correctly defined and represent biologically relevant binding sites.
+
+        Summary & Interpretation
+        ------------------------
+        - The `results.csv` contains predicted binding scores in floating point for
+          each pocket-molecule pair.
+        - Scores can be used to rank ligands or guide further docking and experimental studies.
+
+        Warnings
+        --------
+        - Batch processing is limited by `batchSize`; large values may exceed GPU memory.
+        - Pockets with more than `maxPocketAtoms` atoms will be truncated.
+        - Ensure molecules are valid and convertible to SMILES; otherwise, they will be skipped.
+
     """
     _label = 'binding prediction'
 
