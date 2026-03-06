@@ -159,7 +159,7 @@ class ProtDrugclip(EMProtocol):
 
     def getSmilesStep(self):
         outputFile = self._getPath('smiles.txt')
-        self.smi_to_file = {}
+        self.smiToFile = {}
 
         with open(outputFile, 'w') as out:
             for mol in self.molecules.get():
@@ -172,7 +172,7 @@ class ProtDrugclip(EMProtocol):
 
                 if smi:
                     out.write(smi + "\n")
-                    self.smi_to_file[smi] = os.path.basename(molFile)
+                    self.smiToFile[smi] = os.path.basename(molFile)
                 else:
                     print(f"Failed to extract SMILES from {molFile}")
 
@@ -246,7 +246,7 @@ class ProtDrugclip(EMProtocol):
                 f"{os.path.abspath(os.path.join(Plugin.getVar(DRUGCLIP_DIC['home']), 'DrugCLIP/data'))}"
             ]
 
-            full_command = (
+            fullCommand = (
                     f"export CUDA_VISIBLE_DEVICES={self.gpuList.get()} && "
                     f"python {scriptPath} " + " ".join(args)
             )
@@ -254,7 +254,7 @@ class ProtDrugclip(EMProtocol):
                 self,
                 args=[],
                 condaDic=DRUGCLIP_DIC,
-                program=f"bash -c '{full_command}'",
+                program=f"bash -c '{fullCommand}'",
                 cwd=self._getPath()
             )
 
@@ -294,7 +294,7 @@ class ProtDrugclip(EMProtocol):
             pocketScoresDict[pocket] = pocketScores
 
         allMolecules = sorted(allMolecules)
-        allMoleculeFiles = [self.smi_to_file.get(smi, smi) for smi in allMolecules]
+        allMoleculeFiles = [self.smiToFile.get(smi, smi) for smi in allMolecules]
 
         outputFile = os.path.join(self._getPath(), "results.csv")
         with open(outputFile, "w", newline="") as csvfile:
