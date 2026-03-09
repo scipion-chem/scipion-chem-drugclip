@@ -18,7 +18,7 @@ You will need to first install
 
 1. **Install the plugin in Scipion**
 
-Biofold is installed automatically by scipion.
+DrugCLIP is installed automatically by scipion.
 
 - **Install the stable version (Not available yet)**
 
@@ -41,7 +41,7 @@ Biofold is installed automatically by scipion.
 
     2. **Switch to the desired branch** (master or devel):
 
-    Scipion-chem-biofold is constantly under development and including new features.
+    Scipion-chem-drugclip is constantly under development and including new features.
     If you want a relatively older an more stable version, use master branch (default).
     If you want the latest changes and developments, user devel branch.
 
