@@ -23,14 +23,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import json
 import os, csv
 import pyworkflow.protocol.params as params
 from drugclip import DRUGCLIP_DIC
 from pwem.protocols import EMProtocol
-from pyworkflow.object import String
+from pyworkflow.object import String, Float
 
 from pwchem import Plugin
 from pwchem.objects import  SetOfStructROIs, StructROI
+from pwchem.objects import SetOfSmallMolecules, SmallMolecule
 from pwchem.utils import insistentRun
 from pwchem.constants import RDKIT_DIC, OPENBABEL_DIC
 
@@ -125,10 +127,21 @@ class ProtDrugclip(EMProtocol):
                        help="Comma-separated GPU devices that can be used.")
 
         form.addSection(label='Input')
+        form.addParam('input', params.EnumParam, label='Input ROI(s) as: ', default=0,
+                        choices=['StructROI', 'SetOfStructROIs'],
+                        help='How to input the input structure(s)')
+        form.addParam('pocket', params.PointerParam,
+                      pointerClass='StructROI', allowsNull=True,
+                      label="ROI: ", condition='input==0',
+                      help='Select the input ROI.')
         form.addParam('pockets', params.PointerParam,
-                      pointerClass='SetOfStructROIs', allowsNull=False,
-                      label="ROIs: ",
+                      pointerClass='SetOfStructROIs', allowsNull=True,
+                      label="ROIs: ", condition='input==1',
                       help='Select the input ROIs.')
+        form.addParam('indivPocket', params.StringParam, allowsNull=True, #todo these do not appear correctly, look into it
+                      condition='input==1',
+                      label='Specific ROI: ',
+                      help='Select the input ROI.')
 
         form.addParam('molecules', params.PointerParam,
                       pointerClass='SetOfSmallMolecules', allowsNull=False,
@@ -155,6 +168,7 @@ class ProtDrugclip(EMProtocol):
         self._insertFunctionStep(self.getSmilesStep)
         self._insertFunctionStep(self.convertFilesStep)
         self._insertFunctionStep(self.runDrugclipStep)
+        self._insertFunctionStep(self.createOutputFile)
         self._insertFunctionStep(self.createOutputStep)
 
     def getSmilesStep(self):
@@ -182,8 +196,9 @@ class ProtDrugclip(EMProtocol):
         smilesFile = os.path.abspath(self._getPath("smiles.txt"))
 
         pocketFiles = ",".join(
-            [os.path.abspath(roi.getFileName()) for roi in self.pockets.get()]
+            [os.path.abspath(roi.getFileName()) for roi in self._getInpROIs()]
         )
+        print(pocketFiles)
 
         outputDir = os.path.abspath(self._getPath("lmdb"))
 
@@ -258,67 +273,93 @@ class ProtDrugclip(EMProtocol):
                 cwd=self._getPath()
             )
 
-    def createOutputStep(self):
+    def createOutputFile(self):
+        """ Creates a standard long-format results.csv (Pocket, Molecule, Score) """
         resultsDir = os.path.abspath(self._getPath('results'))
         lmdbDir = os.path.abspath(self._getPath('lmdb'))
 
         pocketFiles = [f for f in os.listdir(lmdbDir) if f.startswith("pocket") and f.endswith(".lmdb")]
         pockets = [os.path.splitext(f)[0] for f in pocketFiles]
 
-        allMolecules = set()
-        pocketScoresDict = {}
-
-        for pocket in pockets:
-            pocketDir = os.path.join(resultsDir, pocket)
-            scoreFile = None
-            for f in os.listdir(pocketDir):
-                if f.endswith(".txt"):
-                    scoreFile = os.path.join(pocketDir, f)
-                    break
-            if not scoreFile:
-                continue
-
-            pocketScores = {}
-            with open(scoreFile) as sf:
-                for line in sf:
-                    parts = line.strip().split("\t")
-                    if len(parts) != 2:
-                        continue
-                    smi, score = parts
-                    try:
-                        pocketScores[smi] = float(score)
-                        allMolecules.add(smi)
-                    except ValueError:
-                        print(f"Invalid score for molecule {smi} in pocket {pocket}")
-
-            pocketScoresDict[pocket] = pocketScores
-
-        allMolecules = sorted(allMolecules)
-        allMoleculeFiles = [self.smiToFile.get(smi, smi) for smi in allMolecules]
-
         outputFile = os.path.join(self._getPath(), "results.csv")
+
         with open(outputFile, "w", newline="") as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(["Pocket"] + allMoleculeFiles)
+            writer.writerow(["pocket", "molecule", "drugclip_score"])
+
             for pocket in pockets:
-                row = [pocket]
-                scores = pocketScoresDict.get(pocket, {})
-                row += [scores.get(smi, 0.0) for smi in allMolecules]
-                writer.writerow(row)
+                pocketDir = os.path.join(resultsDir, pocket)
+                scoreFile = next((os.path.join(pocketDir, f) for f in os.listdir(pocketDir) if f.endswith(".txt")),
+                                 None)
 
-        outSet = SetOfStructROIs(filename=self._getPath('StructROIs.sqlite'))
-        for pocket in self.pockets.get():
-            outPock = StructROI()
-            outPock.copy(pocket)
-            outPock.Drugclip_file = String()
-            outPock.setAttributeValue('Drugclip_file', str(outputFile))
-            outSet.append(outPock)
+                if not scoreFile:
+                    continue
 
-        outSet.Drugclip_file = String()
-        outSet.setAttributeValue('Drugclip_file', str(outputFile))
+                with open(scoreFile) as sf:
+                    for line in sf:
+                        parts = line.strip().split("\t")
+                        if len(parts) == 2:
+                            smi, score = parts
+                            # Map SMILES back to the original filename
+                            molName = self.smiToFile.get(smi, smi)
+                            writer.writerow([pocket, molName, score])
 
-        outSet.buildPDBhetatmFile()
-        self._defineOutputs(outputStructROIs=outSet)
+    def createOutputStep(self):
+        resultsFile = self.getPath("results.csv")
+        scoresJsonFile = self.getPath("scoresFile.json")
+
+        intDic = {}
+        with open(resultsFile, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                pock = row['pocket']
+                mol = row['molecule']
+                score = float(row['drugclip_score'])
+
+                if pock not in intDic:
+                    intDic[pock] = {}
+                intDic[pock][mol] = {"score_drugclip": score}
+
+        inROIs = self._getInpROIs()
+        outROIs = self.pockets.get().create(outputPath=self._getPath()) if self.input.get() == 1 else \
+            SetOfStructROIs().create(outputPath=self._getPath())
+
+        newEntries = []
+        for roi in inROIs:
+            roiName = os.path.basename(roi.getFileName()).split('.')[0]
+
+            outROI = roi.clone()
+            outROI.InteractScoresFile = String(scoresJsonFile)
+            outROIs.append(outROI)
+
+            if roiName in intDic:
+                newEntries.append({
+                    "sequence": roiName,
+                    "molecules": intDic[roiName]
+                })
+
+        with open(scoresJsonFile, "w", encoding="utf-8") as f:
+            json.dump({"entries": newEntries}, f, indent=4)
+
+        if len(inROIs) == 1:
+            roiName = os.path.basename(inROIs[0].getFileName()).split('.')[0]
+            molScores = intDic.get(roiName, {})
+
+            inMols = self.molecules.get()
+            outMols = inMols.createCopy(self._getPath(), copyInfo=True)
+
+            for mol in inMols:
+                nMol = mol.clone()
+                molName = os.path.basename(nMol.getFileName())
+                if molName in molScores:
+                    scoreVal = molScores[molName]["score_drugclip"]
+                    setattr(nMol, '_drugclipScore', Float(scoreVal))
+                    outMols.append(nMol)
+
+            outMols.updateMolClass()
+            self._defineOutputs(outputSmallMolecules=outMols)
+
+        self._defineOutputs(outputPockets=outROIs)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -338,6 +379,22 @@ class ProtDrugclip(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def getSpecifiedROIFile(self): #todo test this
+        myROI = None
+        for roi in self.pockets.get():
+          if roi.__str__() == self.indivPocket.get():
+            myROI = roi.clone()
+            break
+        if myROI == None:
+            print('The input roi is not found')
+            return None
+        
+    def _getInpROIs(self):
+        if self.input.get() == 0:
+            return [self.pocket.get()]
+        #return self.pockets.get()
+        return self.getSpecifiedROIFile()
+
     def getSMI(self, fnSmall):
         fnRoot, ext = os.path.splitext(os.path.basename(fnSmall))
         print("Extension:", ext)

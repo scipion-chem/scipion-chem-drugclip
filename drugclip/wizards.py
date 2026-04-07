@@ -24,3 +24,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from drugclip.protocols import ProtDrugclip
+from pwchem.wizards import SelectElementWizard
+
+SelectElementWizard().addTarget(protocol=ProtDrugclip,
+                               targets=['indivPocket'],
+                               inputs=['pockets'],
+                               outputs=['indivPocket'])
