@@ -431,7 +431,7 @@ class ProtDrugclip(EMProtocol):
         else:
             prevFile = None
 
-        print(prevFile)
+        print(prevFile) #todo see what it returns
 
         if prevFile and os.path.exists(str(prevFile)):
             try:
