@@ -311,10 +311,9 @@ class ProtDrugclip(EMProtocol):
                             molName = self.smiToFile.get(smi, smi)
                             writer.writerow([pocket, molName, score])
 
-    def createOutputStep(self): #todo change output so it follows conplex and omnibind structure
+    def createOutputStep(self):
         resultsFile = self._getPath("results.csv")
         scoresJsonFile = self._getExtraPath("scoresFile.json")
-
 
         intDic = {}
         with open(resultsFile, 'r') as f:
@@ -331,6 +330,8 @@ class ProtDrugclip(EMProtocol):
         inROIs = self._getInpROIs()
         outROIs = self.pockets.get().create(outputPath=self._getPath()) if self.input.get() == 1 else \
             SetOfStructROIs().create(outputPath=self._getPath())
+
+        scoresJsonFile = self.writeInteractScoresDic(intDic) #todo the json file is being overwritten
 
         newEntries = []
         for roi in inROIs:
@@ -418,6 +419,42 @@ class ProtDrugclip(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
+    def writeInteractScoresDic(self, intDic, outFile=None):
+        if not outFile:
+            outFile = os.path.join(self._getExtraPath(), 'scoresFile.json')
+
+        finalData = {}
+        inROIs = self._getInpROIs()
+
+        if hasattr(inROIs, '_interactScoresFile'):
+            prevFile = inROIs.getInteractScoresFile()
+        else:
+            prevFile = None
+
+        print(prevFile)
+
+        if prevFile and os.path.exists(str(prevFile)):
+            try:
+                with open(str(prevFile), 'r') as f:
+                    finalData = json.load(f)
+            except Exception:
+                finalData = {}
+
+        for protID, newMols in intDic.items():
+            if protID not in finalData:
+                finalData[protID] = {}
+
+            for molName, newScores in newMols.items():
+                if molName in finalData[protID]:
+                    finalData[protID][molName].update(newScores)
+                else:
+                    finalData[protID][molName] = newScores
+
+        with open(outFile, 'w') as f:
+            json.dump(finalData, f, indent=4)
+
+        return outFile
+
     def getSpecifiedROIFile(self):
         myROI = None
         for roi in self.pockets.get():
