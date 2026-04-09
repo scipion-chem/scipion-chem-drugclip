@@ -25,6 +25,8 @@
 # **************************************************************************
 import json
 import os, csv
+import shutil
+
 import pyworkflow.protocol.params as params
 from drugclip import DRUGCLIP_DIC
 from pwem.protocols import EMProtocol
@@ -130,23 +132,27 @@ class ProtDrugclip(EMProtocol):
         form.addParam('input', params.EnumParam, label='Input ROI(s) as: ', default=0,
                         choices=['StructROI', 'SetOfStructROIs'],
                         help='How to input the input structure(s)')
-        form.addParam('pocket', params.PointerParam,
-                      pointerClass='StructROI', allowsNull=True,
-                      label="ROI: ", condition='input==0',
-                      help='Select the input ROI.')
         form.addParam('pockets', params.PointerParam,
                       pointerClass='SetOfStructROIs', allowsNull=True,
-                      label="ROIs: ", condition='input==1',
+                      label="ROIs: ",
                       help='Select the input ROIs.')
-        form.addParam('indivPocket', params.StringParam, allowsNull=True, #todo these do not appear correctly, look into it
-                      condition='input==1',
+        form.addParam('indivPocket', params.StringParam, allowsNull=True,
+                      condition='input==0',
                       label='Specific ROI: ',
                       help='Select the input ROI.')
 
-        form.addParam('molecules', params.PointerParam,
-                      pointerClass='SetOfSmallMolecules', allowsNull=False,
-                      label="Molecules: ",
-                      help='Select the molecules to use.')
+        #todo use this new
+        iGroup = form.addGroup('Input Ligands')
+        iGroup.addParam('useLibrary', params.BooleanParam, label='Use library as input : ', default=False,
+                        help='Whether to use a SMI library SmallMoleculesLibrary object as input')
+
+        iGroup.addParam('inputLibrary', params.PointerParam, pointerClass="SmallMoleculesLibrary",
+                        label='Input library: ', condition='useLibrary',
+                        help="Input Small molecules library to predict")
+        iGroup.addParam('molecules', params.PointerParam, pointerClass="SetOfSmallMolecules",
+                        label='Input small molecules: ', condition='not useLibrary',
+                        help='Set of small molecules to input the model for predicting their interactions')
+
 
         form.addParam('useManager', params.EnumParam, default=1, label='Manage structure using: ',
                       choices=['RDKit', 'OpenBabel'],
@@ -174,9 +180,10 @@ class ProtDrugclip(EMProtocol):
     def getSmilesStep(self):
         outputFile = self._getPath('smiles.txt')
         self.smiToFile = {}
+        mols = self.inputLibrary.get() if self.useLibrary.get() else self.molecules.get()
 
         with open(outputFile, 'w') as out:
-            for mol in self.molecules.get():
+            for mol in mols:
 
                 molFile = (os.path.abspath(mol.getPoseFile())
                            if mol.getPoseFile()
@@ -195,15 +202,15 @@ class ProtDrugclip(EMProtocol):
     def convertFilesStep(self):
         smilesFile = os.path.abspath(self._getPath("smiles.txt"))
 
-        pocketFiles = ",".join(
-            [os.path.abspath(roi.getFileName()) for roi in self._getInpROIs()]
-        )
-        print(pocketFiles)
+        rois = self._getInpROIs()
+
+        paths = [os.path.abspath(roi.getFileName()) for roi in rois]
+        pocketFilesStr = ",".join(paths)
 
         outputDir = os.path.abspath(self._getPath("lmdb"))
 
         args = (f"--smiles-file {smilesFile} "
-            f"--pocket-files {pocketFiles} "
+            f"--pocket-files {pocketFilesStr} "
             f"--output-dir {outputDir} "
             f"--max-pocket-atoms {self.maxPocketAtoms.get()}"
         )
@@ -304,9 +311,10 @@ class ProtDrugclip(EMProtocol):
                             molName = self.smiToFile.get(smi, smi)
                             writer.writerow([pocket, molName, score])
 
-    def createOutputStep(self):
-        resultsFile = self.getPath("results.csv")
-        scoresJsonFile = self.getPath("scoresFile.json")
+    def createOutputStep(self): #todo change output so it follows conplex and omnibind structure
+        resultsFile = self._getPath("results.csv")
+        scoresJsonFile = self._getExtraPath("scoresFile.json")
+
 
         intDic = {}
         with open(resultsFile, 'r') as f:
@@ -318,7 +326,7 @@ class ProtDrugclip(EMProtocol):
 
                 if pock not in intDic:
                     intDic[pock] = {}
-                intDic[pock][mol] = {"score_drugclip": score}
+                intDic[pock][mol] = {"DrugCLIP_score": score}
 
         inROIs = self._getInpROIs()
         outROIs = self.pockets.get().create(outputPath=self._getPath()) if self.input.get() == 1 else \
@@ -329,7 +337,6 @@ class ProtDrugclip(EMProtocol):
             roiName = os.path.basename(roi.getFileName()).split('.')[0]
 
             outROI = roi.clone()
-            outROI.InteractScoresFile = String(scoresJsonFile)
             outROIs.append(outROI)
 
             if roiName in intDic:
@@ -339,27 +346,59 @@ class ProtDrugclip(EMProtocol):
                 })
 
         with open(scoresJsonFile, "w", encoding="utf-8") as f:
-            json.dump({"entries": newEntries}, f, indent=4)
+            json.dump(intDic, f, indent=4)
+
+        prevFile = outROIs.getInteractScoresFile()
+        if prevFile and os.path.exists(prevFile):
+            shutil.copy(prevFile, scoresJsonFile)
+
+        outROIs.setInteractScoresFile(scoresJsonFile)
+        outROIs.setInteractScoresDic(intDic)
+        outROIs.updateScoreTypes()
+
+        outMols = self.inputLibrary.get() if self.useLibrary.get() else self.molecules.get()
+
+        outROIs.setInteractMols(mols=outMols)
+        self._defineOutputs(outputPockets=outROIs)
+
+        inMols = self.inputLibrary.get() if self.useLibrary.get() else self.molecules.get()
+
+        if not self.useLibrary.get():
+            outputMols = inMols.createCopy(self._getPath(), copyInfo=True)
+
+            for mol in inMols:
+                nMol = mol.clone()
+                molName = os.path.basename(nMol.getFileName())
+
+                for roiIdx, roi in enumerate(inROIs):
+                    roiName = os.path.splitext(os.path.basename(roi.getFileName()))[0]
+                    scoreVal = intDic.get(roiName, {}).get(molName, {}).get("DrugCLIP_score", 0.0)
+
+                    attrName = f'DrugCLIP_score_{roiName}' if len(inROIs) > 1 else 'DrugCLIP_score'
+                    setattr(nMol, attrName, Float(scoreVal))
+
+                outputMols.append(nMol)
+
+            outputMols.updateMolClass()
+            self._defineOutputs(outputSmallMolecules=outputMols)
 
         if len(inROIs) == 1:
             roiName = os.path.basename(inROIs[0].getFileName()).split('.')[0]
             molScores = intDic.get(roiName, {})
 
-            inMols = self.molecules.get()
             outMols = inMols.createCopy(self._getPath(), copyInfo=True)
 
             for mol in inMols:
                 nMol = mol.clone()
                 molName = os.path.basename(nMol.getFileName())
                 if molName in molScores:
-                    scoreVal = molScores[molName]["score_drugclip"]
-                    setattr(nMol, '_drugclipScore', Float(scoreVal))
+                    scoreVal = molScores[molName]["DrugCLIP_score"]
+                    setattr(nMol, 'DrugCLIP_score', Float(scoreVal))
                     outMols.append(nMol)
 
             outMols.updateMolClass()
             self._defineOutputs(outputSmallMolecules=outMols)
 
-        self._defineOutputs(outputPockets=outROIs)
 
     # --------------------------- INFO functions -----------------------------------
     def _summary(self):
@@ -379,21 +418,21 @@ class ProtDrugclip(EMProtocol):
         return warnings
 
     # --------------------------- UTILS functions -----------------------------------
-    def getSpecifiedROIFile(self): #todo test this
+    def getSpecifiedROIFile(self):
         myROI = None
         for roi in self.pockets.get():
           if roi.__str__() == self.indivPocket.get():
             myROI = roi.clone()
             break
-        if myROI == None:
-            print('The input roi is not found')
-            return None
+        return myROI
         
     def _getInpROIs(self):
-        if self.input.get() == 0:
-            return [self.pocket.get()]
-        #return self.pockets.get()
-        return self.getSpecifiedROIFile()
+        if self.input.get() == 1:
+            return self.pockets.get()
+        else:
+            roi = self.getSpecifiedROIFile()
+            return [roi]
+
 
     def getSMI(self, fnSmall):
         fnRoot, ext = os.path.splitext(os.path.basename(fnSmall))
