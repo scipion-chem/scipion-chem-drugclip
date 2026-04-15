@@ -52,8 +52,11 @@ def writeLmdb(entries, path):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--smiles-file", required=True,
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--smiles-file", default=None,
                         help="Text file containing one SMILES per line")
+    group.add_argument("--smiles-dir", default=None,
+                        help="Directory containing the SMILE files")
 
     parser.add_argument("--pocket-files", required=True,
                         help="Comma-separated list of pocket PDB files")
@@ -69,12 +72,21 @@ def main():
 
     # Molecules
     molEntries = []
-    with open(args.smiles_file) as f:
-        for line in f:
-            smiles = line.strip()
+    if args.smiles_file:
+        with open(args.smiles_file) as f:
+            for line in f:
+                entry = processMolecule(line.strip())
+                if entry:
+                    molEntries.append(entry)
+    elif args.smiles_dir:
+        for smiFile in os.listdir(args.smiles_dir):
+            smiFile = os.path.join(args.smiles_dir, smiFile)
+            with open(smiFile) as f:
+                smiles = f.read().strip().split()[0]
             entry = processMolecule(smiles)
             if entry:
                 molEntries.append(entry)
+
 
     molLmdbPath = os.path.join(args.output_dir, "mols.lmdb")
     writeLmdb(molEntries, molLmdbPath)

@@ -29,5 +29,5 @@ from pwchem.wizards import SelectElementWizard
 
 SelectElementWizard().addTarget(protocol=ProtDrugclip,
                                targets=['indivPocket'],
-                               inputs=['pockets'],
+                               inputs=['inputStructROIs'],
                                outputs=['indivPocket'])

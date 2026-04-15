@@ -78,10 +78,10 @@ class TestDrugclip(BaseTest):
     def _runDrugclip(self):
         protDc = self.newProtocol(ProtDrugclip)
 
-        protDc.pockets.set(self.protDef)
-        protDc.pockets.setExtended('outputStructROIs')
-        protDc.molecules.set(self.protImportSmallMols)
-        protDc.molecules.setExtended('outputSmallMolecules')
+        protDc.inputStructROIs.set(self.protDef)
+        protDc.inputStructROIs.setExtended('outputStructROIs')
+        protDc.inputSmallMolecules.set(self.protImportSmallMols)
+        protDc.inputSmallMolecules.setExtended('outputSmallMolecules')
 
         self.proj.launchProtocol(protDc, wait=False)
         return protDc
