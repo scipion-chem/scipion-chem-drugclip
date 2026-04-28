@@ -442,7 +442,6 @@ class ProtDrugclip(EMProtocol):
 
         prevFile = rois.getInteractScoresFile()
 
-        print(f'---i got: {prevFile}')
 
         if prevFile and os.path.exists(str(prevFile)):
             try:
@@ -451,7 +450,6 @@ class ProtDrugclip(EMProtocol):
             except Exception:
                 finalData = {}
 
-        print(f'----data before: {finalData}')
 
         for protID, newMols in intDic.items():
             if protID not in finalData:
@@ -463,7 +461,6 @@ class ProtDrugclip(EMProtocol):
                 else:
                     finalData[protID][molName] = newScores
 
-        print(f'----data after: {finalData}')
 
         with open(outFile, 'w') as f:
             json.dump(finalData, f, indent=4)
@@ -488,7 +485,6 @@ class ProtDrugclip(EMProtocol):
 
     def getSMI(self, fnSmall):
         fnRoot, ext = os.path.splitext(os.path.basename(fnSmall))
-        print("Extension:", ext)
 
         if ext != '.smi':
             outDir = os.path.abspath(self._getExtraPath())
