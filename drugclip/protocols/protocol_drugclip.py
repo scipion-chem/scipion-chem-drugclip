@@ -480,8 +480,8 @@ class ProtDrugclip(EMProtocol):
         return myROI
         
     def _getInpROIs(self):
-        if self.input.get() == 1:
-            return self.pockets.get()
+        if not self.indivPocket.get().strip():
+            return self.inputStructROIs.get()
         else:
             roi = self.getSpecifiedROIFile()
             return [roi]
