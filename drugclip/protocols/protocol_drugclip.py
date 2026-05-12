@@ -447,7 +447,6 @@ class ProtDrugclip(EMProtocol):
 
         prevFile = rois.getInteractScoresFile()
 
-        print(f'---i got: {prevFile}')
 
         if prevFile and os.path.exists(str(prevFile)):
             try:
@@ -456,7 +455,6 @@ class ProtDrugclip(EMProtocol):
             except Exception:
                 finalData = {}
 
-        print(f'----data before: {finalData}')
 
         for protID, newMols in intDic.items():
             if protID not in finalData:
@@ -468,7 +466,6 @@ class ProtDrugclip(EMProtocol):
                 else:
                     finalData[protID][molName] = newScores
 
-        print(f'----data after: {finalData}')
 
         with open(outFile, 'w') as f:
             json.dump(finalData, f, indent=4)
@@ -484,10 +481,40 @@ class ProtDrugclip(EMProtocol):
         return myROI
         
     def _getInpROIs(self):
-        inROIs = self.inputStructROIs.get()
-        if self.indivPocket.get().strip():
-            inROIs = [self.getSpecifiedROIFile()]
-        return inROIs
+        if self.input.get() == 1:
+            return self.pockets.get()
+        else:
+            roi = self.getSpecifiedROIFile()
+            return [roi]
+
+
+    def getSMI(self, fnSmall):
+        fnRoot, ext = os.path.splitext(os.path.basename(fnSmall))
+
+        if ext != '.smi':
+            outDir = os.path.abspath(self._getExtraPath())
+            fnOut = os.path.abspath(self._getExtraPath(fnRoot + '.smi'))
+
+            args = f' -i "{fnSmall}" -of smi -o {fnOut} --outputDir {outDir}'
+
+            if fnSmall.endswith(".pdbqt") or fnSmall.endswith(".mol2"):
+                envDic, scriptName = OPENBABEL_DIC, 'obabel_IO.py'
+            else:
+                envDic, scriptName = RDKIT_DIC, 'rdkit_IO.py'
+
+            fullProgram = (
+                f'{Plugin.getEnvActivationCommand(envDic)} '
+                f'&& python {Plugin.getScriptsDir(scriptName)} '
+            )
+
+            insistentRun(self, fullProgram, args, envDic=envDic, cwd=outDir)
+
+            if not os.path.exists(fnOut):
+                print(f"SMILES conversion failed for {fnSmall}")
+                return None
+
+        else:
+            fnOut = fnSmall
 
 
     def parseSMI(self, smiFile):
