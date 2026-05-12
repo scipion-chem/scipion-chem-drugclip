@@ -332,7 +332,6 @@ class ProtDrugclip(EMProtocol):
         inROIs = self._getInpROIs()
         outROIs = self.inputStructROIs.get().createCopy(outputPath=self._getPath(), copyItems=True)
 
-        #todo: check this is fine
         outROIs.setInteractScoresFile(scoresJsonFile)
         outROIs.setInteractScoresDic(data)
         outROIs.updateScoreTypes()
@@ -515,6 +514,7 @@ class ProtDrugclip(EMProtocol):
 
         else:
             fnOut = fnSmall
+        return self.parseSMI(fnOut)
 
 
     def parseSMI(self, smiFile):
