@@ -177,9 +177,24 @@ class ProtDrugclip(EMProtocol):
             format(molDir, '*', smiDir)
         Plugin.runScript(self, 'obabel_IO.py', args, env=OPENBABEL_DIC, cwd=smiDir)
 
+    def getSMIIndex(self, headers):
+        i = 0
+        for i, h in enumerate(headers[:2]):
+            if 'smi' in h.lower():
+                break
+        return i
+
+    def getCleanSMIFile(self):
+        libFile = os.path.abspath(self.inputLibrary.get().getFileName())
+        oFile = os.path.abspath(self._getTmpPath('inputLibrary.smi'))
+        heads = self.inputLibrary.get().getHeaders()
+        smiIdx = self.getSMIIndex(heads)
+        self.runJob('cut', f'-f{smiIdx+1} {libFile} > {oFile}')
+        return oFile
+
     def createLMDBStep(self):
         if self.useLibrary.get():
-            smilesFile = os.path.abspath(self.inputLibrary.get().getFileName())
+            smilesFile = self.getCleanSMIFile()
             iArgs = f'--smiles-file {smilesFile}'
         else:
             iArgs = f'--smiles-dir {self.getInputSMIDir()}'
@@ -298,7 +313,7 @@ class ProtDrugclip(EMProtocol):
         resultsFile = self._getPath("results.csv")
         scoresJsonFile = self._getExtraPath("scoresFile.json")
 
-        intDic = {}
+        intDic, data = {}, {}
         with open(resultsFile, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -306,30 +321,25 @@ class ProtDrugclip(EMProtocol):
                 mol = row['molecule']
                 score = float(row['drugclip_score'])
 
-                if pock not in intDic:
-                    intDic[pock] = {}
-                intDic[pock][mol] = {"DrugCLIP_score": score}
+                if mol not in intDic:
+                    intDic[mol] = {}
+                intDic[mol][pock] = score
+
+                if pock not in data:
+                    data[pock] = {}
+                data[pock][mol] = {'DrugClip_score': score}
 
         inROIs = self._getInpROIs()
-        outROIs = self.inputStructROIs.get().createCopy(outputPath=self._getPath())
+        outROIs = self.inputStructROIs.get().createCopy(outputPath=self._getPath(), copyItems=True)
 
-        for roi in inROIs:
-            outRoi = roi.clone()
-            outROIs.append(outRoi)
-
-        scoresJsonFile = self.writeInteractScoresDic(intDic) #todo the json file is being overwritten
-
-        with open(scoresJsonFile, 'r') as f:
-            combinedDic = json.load(f)
-
-
+        #todo: check this is fine
         outROIs.setInteractScoresFile(scoresJsonFile)
-        outROIs.setInteractScoresDic(combinedDic)
+        outROIs.setInteractScoresDic(data)
         outROIs.updateScoreTypes()
 
         outMols = self.inputLibrary.get() if self.useLibrary.get() else self.inputSmallMolecules.get()
-
         outROIs.setInteractMols(mols=outMols)
+
         self._defineOutputs(outputStructROIs=outROIs)
 
         if not self.useLibrary.get():
@@ -342,7 +352,7 @@ class ProtDrugclip(EMProtocol):
 
                 for roiIdx, roi in enumerate(inROIs):
                     roiName = os.path.splitext(os.path.basename(roi.getFileName()))[0]
-                    scoreVal = intDic.get(roiName, {}).get(molName, {}).get("DrugCLIP_score", 0.0)
+                    scoreVal = intDic.get(molName, {}).get(roiName, 0.0)
 
                     attrName = f'DrugCLIP_score_{roiName}' if len(inROIs) > 1 else 'DrugCLIP_score'
                     setattr(nMol, attrName, Float(scoreVal))
@@ -365,22 +375,13 @@ class ProtDrugclip(EMProtocol):
                 newHeaders.append(header)
 
             with open(oLibFile, 'w') as f:
-                allMols = set()
-                for rName in roiNames:
-                    allMols.update(combinedDic.get(rName, {}).keys())
+                for molName, molDic in intDic.items():
+                    nCols = []
+                    for roiName, score in molDic.items():
+                        nCols.append(str(score))
 
-                for molName in allMols:
-                    if molName in mapDic:
-                        lineBase = mapDic[molName].strip()
-                        scoresLine = []
-
-                        for rName in roiNames:
-                            valDic = combinedDic.get(rName, {}).get(molName, {})
-                            s = valDic.get("DrugCLIP_score", 0.0)
-                            scoresLine.append(str(s))
-
-                        scoresStr = '\t'.join(scoresLine)
-                        f.write(f"{lineBase}\t{scoresStr}\n")
+                    newLine = '\t'.join(nCols)
+                    f.write(f'{mapDic[molName]}\t{newLine}\n')
 
             outputLib = inLib.clone()
             outputLib.setFileName(oLibFile)
@@ -427,10 +428,7 @@ class ProtDrugclip(EMProtocol):
         '''
         smiDic = {}
         if self.useLibrary.get():
-            with open(self.inputLibrary.get().getFileName()) as f:
-                for line in f:
-                    smi, molName = line.strip().split()
-                    smiDic[smi] = molName
+            smiDic = self.inputLibrary.get().getLibraryMap()
         else:
             for smiFile in os.listdir(self.getInputSMIDir()):
                 with open(os.path.join(self.getInputSMIDir(), smiFile)) as f:
