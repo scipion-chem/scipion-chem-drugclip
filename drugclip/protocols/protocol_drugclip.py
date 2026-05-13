@@ -23,8 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import json
-import os, csv
+import os, csv, shutil, json
 
 import pyworkflow.protocol.params as params
 from drugclip import DRUGCLIP_DIC
@@ -330,9 +329,15 @@ class ProtDrugclip(EMProtocol):
                 data[pock][mol] = {'DrugClip_score': score}
 
         inROIs = self._getInpROIs()
-        outROIs = self.inputStructROIs.get().createCopy(outputPath=self._getPath(), copyItems=True)
+        outROIs = self.inputStructROIs.get().createCopy(outputPath=self._getPath())
+        for roi in inROIs:
+            outROIs.append(roi.clone())
 
+        prevFile = self.inputStructROIs.get().getInteractScoresFile()
+        if prevFile and os.path.exists(prevFile):
+            shutil.copy(prevFile, scoresJsonFile)
         outROIs.setInteractScoresFile(scoresJsonFile)
+
         outROIs.setInteractScoresDic(data)
         outROIs.updateScoreTypes()
 
@@ -443,7 +448,6 @@ class ProtDrugclip(EMProtocol):
         finalData = {}
 
         rois = self.inputStructROIs.get()
-
         prevFile = rois.getInteractScoresFile()
 
 
