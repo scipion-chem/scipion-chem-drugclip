@@ -441,40 +441,6 @@ class ProtDrugclip(EMProtocol):
                         smiDic[smi] = molName
         return smiDic
 
-    def writeInteractScoresDic(self, intDic, outFile=None):
-        if not outFile:
-            outFile = os.path.join(self._getExtraPath(), 'scoresFile.json')
-
-        finalData = {}
-
-        rois = self.inputStructROIs.get()
-        prevFile = rois.getInteractScoresFile()
-
-
-        if prevFile and os.path.exists(str(prevFile)):
-            try:
-                with open(str(prevFile), 'r') as f:
-                    finalData = json.load(f)
-            except Exception:
-                finalData = {}
-
-
-        for protID, newMols in intDic.items():
-            if protID not in finalData:
-                finalData[protID] = {}
-
-            for molName, newScores in newMols.items():
-                if molName in finalData[protID]:
-                    finalData[protID][molName].update(newScores)
-                else:
-                    finalData[protID][molName] = newScores
-
-
-        with open(outFile, 'w') as f:
-            json.dump(finalData, f, indent=4)
-
-        return outFile
-
     def getSpecifiedROIFile(self):
         myROI = None
         for roi in self.inputStructROIs.get():
