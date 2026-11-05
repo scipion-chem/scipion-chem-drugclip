@@ -58,7 +58,7 @@ class Plugin(pwchemPlugin):
             pythonVersion='3.11'
         ).addCommand(
             f"{cls.getEnvActivationCommand(DRUGCLIP_DIC)} && "
-            "pip install -U torch torchvision torchaudio ipython tqdm rdkit==2022.9.3 lmdb biopython 'numpy<2'"
+            "pip install -U torch torchvision torchaudio ipython tqdm rdkit==2022.9.5 lmdb biopython 'numpy<2'"
         ).addCommand(
             f"{cls.getEnvActivationCommand(DRUGCLIP_DIC)} && "
             "git clone https://github.com/bowen-gao/DrugCLIP.git",
